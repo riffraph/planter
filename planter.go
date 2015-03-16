@@ -3,13 +3,16 @@ package main
 import "fmt"
 import "io/ioutil"
 import "os"
+import "os/exec"
 import "path/filepath"
+import "bytes"
 
 // Args:
 // inputFolder: otherwise assume current path
 // outputFolder: otherwise assume current path
 
 var fileTypes = [...]string{".pu", ".puml"} // supported file types
+const plantUmlPath = "./plantuml.jar"
 
 func main() {
 	currentDir, err := os.Getwd()
@@ -37,8 +40,24 @@ func main() {
 	// find all the compatible files in the input dir
 	fileList := getFileList(inputFolder)
 
-	for _, file := range fileList {
-		fmt.Println(file)
+	for _, puFile := range fileList {
+		filename := puFile.Name()
+		extension := filepath.Ext(filename)
+		pngFilename := filename[0:len(filename)-len(extension)] + ".png"
+
+		fmt.Println("pngFilename:", pngFilename)
+
+		// check if the .png exists
+		pngFile, err := os.Stat(pngFilename)
+		if err == nil {
+			// do not generate the image if the source file hasn't changed
+			if pngFile.ModTime().After(puFile.ModTime()) {
+				continue
+			}
+		}
+
+		// generate the image
+		generateImage(puFile)
 	}
 }
 
@@ -60,6 +79,19 @@ func getFileList(inputFolder string) []os.FileInfo {
 	}
 
 	return list
+}
+
+// generateFiles
+//
+func generateImage(file os.FileInfo) {
+	//cmd := exec.Command("echo", file.Name())
+	cmd := exec.Command("java", "-jar", plantUmlPath, file.Name())
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	err := cmd.Run()
+	parseError(err)
+
+	fmt.Println(out.String())
 }
 
 func parseError(err error) {
